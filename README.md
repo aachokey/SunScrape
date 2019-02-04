@@ -1,5 +1,7 @@
 # SunScrape
 
+[![Build Status](https://travis-ci.com/SunSentinel/SunScrape.svg?branch=master)](https://travis-ci.com/SunSentinel/SunScrape)
+
 A python library that scrapes and parses campaign finance data from the [Florida Secretary of State's website](https://dos.myflorida.com/elections/candidates-committees/campaign-finance/campaign-finance-database/).
 
 
