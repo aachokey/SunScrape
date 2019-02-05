@@ -6,7 +6,9 @@ A python library that scrapes and parses campaign finance data from the [Florida
 
 
 ## Installation
-TK
+This package isn't on PyPI yet, so install from the repo:
+
+`pip install git+https://github.com/SunSentinel/SunScrape.git`
 
 
 ## Usage
