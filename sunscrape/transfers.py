@@ -67,7 +67,7 @@ class TransferScraper(SunScraper):
             cleaned_transfer['transfer_from'] = get_name(transfer['Candidate/Committee'])
             cleaned_transfer['transfer_from_party'] = get_party(transfer['Candidate/Committee'])
             cleaned_transfer['date'] = self.toDate(transfer['Date'])
-            cleaned_transfer['amount'] = transfer['Amount']
+            cleaned_transfer['amount'] = float(transfer['Amount'])
             cleaned_transfer['transfer_to'] = strip_spaces(transfer['Funds Transferred To'])
             cleaned_transfer['transfer_from_address'] = strip_spaces(transfer['Address'])
             cleaned_transfer['transfer_from_address2'] = strip_spaces(transfer['City State Zip'])

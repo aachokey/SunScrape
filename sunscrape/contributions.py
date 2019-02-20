@@ -69,7 +69,7 @@ class ContributionScraper(SunScraper):
             cleaned_contrib['candidate'] = get_name(contrib['Candidate/Committee'])
             cleaned_contrib['candidate_party'] = get_party(contrib['Candidate/Committee'])
             cleaned_contrib['date'] = self.toDate(contrib['Date'])
-            cleaned_contrib['amount'] = contrib['Amount']
+            cleaned_contrib['amount'] = float(contrib['Amount'])
             cleaned_contrib['type'] = strip_spaces(contrib['Typ'])
             cleaned_contrib['contributor_name'] = strip_spaces(contrib['Contributor Name'])
             cleaned_contrib['contributor_address'] = strip_spaces(contrib['Address'])
