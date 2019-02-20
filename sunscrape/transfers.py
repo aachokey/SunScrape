@@ -10,7 +10,7 @@ class TransferScraper(SunScraper):
     url = "https://dos.elections.myflorida.com/cgi-bin/FundXfers.exe"
     portal_url = "https://dos.elections.myflorida.com/campaign-finance/transfers/"
     payload = {
-        "election": "20181106-GEN",
+        "election": "All",
         "search_on": 1,
         "CanFName": "",
         "CanLName": "",

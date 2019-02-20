@@ -33,7 +33,7 @@ Available options:
 **Example**
 ```python
 
->>> from SunScrape import ContributionScraper
+>>> from sunscrape.contributions import ContributionScraper
 >>> scraper = ContributionScraper(candidate_first='Ron', candidate_last='Desantis')
 >>> scraper.results
 

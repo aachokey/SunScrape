@@ -10,7 +10,7 @@ class ExpenditureScraper(SunScraper):
     url = "https://dos.elections.myflorida.com/cgi-bin/expend.exe"
     portal_url = "https://dos.elections.myflorida.com/campaign-finance/expenditures/"
     payload = {
-        "election": "20181106-GEN",
+        "election": "All",
         "search_on": 1,
         "CanFName": "",
         "CanLName": "",

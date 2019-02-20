@@ -10,7 +10,7 @@ class ContributionScraper(SunScraper):
     url = "http://dos.elections.myflorida.com/cgi-bin/contrib.exe"
     portal_url = "https://dos.elections.myflorida.com/campaign-finance/contributions/"
     payload = {
-        "election": "20181106-GEN",
+        "election": "All",
         "search_on": 1,
         "CanFName": "",
         "CanLName": "",
@@ -31,7 +31,7 @@ class ContributionScraper(SunScraper):
         "coccupation": "",
         "cdollar_minimum": "",
         "cdollar_maximum": "",
-        "rowlimit": 20,
+        "rowlimit": "",
         "csort1": "NAM",
         "csort2": "CAN",
         "queryformat": 2
