@@ -107,5 +107,7 @@ class SunScraper(object):
 
         text = text.strip()
         dt = datetime.strptime(text, cls.date_format)
-
-        return dt.date().isoformat()
+        try:
+            return dt.date().isoformat()
+        except ValueError:
+            return ''
