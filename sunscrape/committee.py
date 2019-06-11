@@ -10,7 +10,6 @@ from bs4 import BeautifulSoup
 class CommitteeScraper():
     """ Returns a committee """
 
-    result_type = 'committee'
     url = "https://dos.elections.myflorida.com/cgi-bin/TreFin.exe"
     payload = {
         "account": 0,
@@ -137,25 +136,42 @@ class CommitteeScraper():
         data = self.request(self.url, self.payload)
 
         clean_data = []
-        for item in data:
-            cleaned_item = {}
-            cleaned_item['report_year'] = item['Rpt Yr']
-            cleaned_item['report_type'] = item['Rpt Type']
-            cleaned_item['date'] = toDate(item['Date'])
-            cleaned_item['amount'] = float(item['Amount'])
-            cleaned_item['type'] = strip_spaces(item['Typ'])
-            cleaned_item['contributor_name'] = strip_spaces(item['Contributor Name'])
-            cleaned_item['contributor_address'] = strip_spaces(item['Address'])
-            cleaned_item['contributor_address2'] = strip_spaces(item['City State Zip'])
-            cleaned_item['contributor_occupation'] = strip_spaces(item['Occupation'])
-            cleaned_item['item_type'] = strip_spaces(item['Typ'])
-            cleaned_item['inkind_description'] = strip_spaces(item['InKind Desc'])
 
-            clean_data.append(cleaned_item)
+        if self.result_type == 'contributions':
+            for item in data:
+                cleaned_item = {}
+                cleaned_item['report_year'] = item['Rpt Yr']
+                cleaned_item['report_type'] = item['Rpt Type']
+                cleaned_item['date'] = toDate(item['Date'])
+                cleaned_item['amount'] = float(item['Amount'])
+                cleaned_item['type'] = strip_spaces(item['Typ'])
+                cleaned_item['contributor_name'] = strip_spaces(item['Contributor Name'])
+                cleaned_item['contributor_address'] = strip_spaces(item['Address'])
+                cleaned_item['contributor_address2'] = strip_spaces(item['City State Zip'])
+                cleaned_item['contributor_occupation'] = strip_spaces(item['Occupation'])
+                cleaned_item['item_type'] = strip_spaces(item['Typ'])
+                cleaned_item['inkind_description'] = strip_spaces(item['InKind Desc'])
 
-        return clean_data
+                clean_data.append(cleaned_item)
 
-    # TODO:
-    # 1. Get meta info on committee
-    # 2. Plug account number into committee_finances_payload
-    # 3. Return results
+            return clean_data
+
+        elif self.result_type == 'expenditures':
+            for item in data:
+                cleaned_item = {}
+                cleaned_item['report_year'] = item['Rpt Yr']
+                cleaned_item['report_type'] = item['Rpt Type']
+                cleaned_item['date'] = toDate(item['Date'])
+                cleaned_item['amount'] = float(item['Amount'])
+                cleaned_item['paid_to_name'] = strip_spaces(item['Expense Paid To'])
+                cleaned_item['paid_to_address'] = strip_spaces(item['Address'])
+                cleaned_item['paid_to_address2'] = strip_spaces(item['City State Zip'])
+                cleaned_item['purpose'] = strip_spaces(item['Purpose'])
+                cleaned_item['item_type'] = strip_spaces(item['Typ Reimb'])
+
+                clean_data.append(cleaned_item)
+
+            return clean_data
+
+        elif self.result_type == '':
+            print('Error: No result type provided.')

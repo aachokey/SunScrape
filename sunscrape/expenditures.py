@@ -64,8 +64,8 @@ class ExpenditureScraper(SunScraper):
         for expense in data:
 
             cleaned_expense = {}
-            cleaned_expense['candidate'] = get_name(expense['Candidate/Committee'])
-            cleaned_expense['candidate_party'] = get_party(expense['Candidate/Committee'])
+            cleaned_expense['spender'] = get_name(expense['Candidate/Committee'])
+            cleaned_expense['spender_party'] = get_party(expense['Candidate/Committee'])
             cleaned_expense['date'] = self.toDate(expense['Date'])
             cleaned_expense['amount'] = float(expense['Amount'])
             cleaned_expense['recipient'] = strip_spaces(expense['Payee Name'])

@@ -14,13 +14,21 @@ This package isn't on PyPI yet, so install from the repo:
 ## Usage
 SunScrape makes it possible to grab campaign finance data in bulk in a usable, machine-readable format. 
 
-This library provides a way to search Florida's campaign finance portal by election, candidate, committee and date range.
+This library provides a way to search Florida's campaign finance portal either by a particular entity or a specific filing type.
 
 
-### Scrapers
-SunScrape provides scrapers that allow searching through contributions, expenditures and fund transfers.
+### By entity
+Results can be obtained for a particular candidate or committee.
 
-Available options:
+#### Candidate
+Results for a candidate.
+
+#### Committee
+Results of a particular committee registered in the state. A list of these committees can be found here: https://dos.elections.myflorida.com/committees/ComLkupByName.asp
+
+
+### By filing
+You can also search through all contributions, expenses or fund transfers reported to the SOS's office. Additional search terms can also be passed to these object:
 
 * `candidate_first` - Candidate first name
 * `candidate_last` - Candidate last name
@@ -29,6 +37,12 @@ Available options:
 * `committee_name` - Committee name, or partial name
 * `election_id` - See [Election IDs](#election-ids)
 * `all_time` - `True` or `False`, returns results for all years
+
+#### Contributions
+#### Expenses
+#### Transfers
+
+
 
 **Example**
 ```python
