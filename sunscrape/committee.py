@@ -42,7 +42,7 @@ class CommitteeScraper():
 
         search_payload = {
             "searchtype": 1,
-            "comName": self.committee_name,
+            "comName": self.committee_name[:50],
             "LkupTypeName": "L",
             "NameSearchBtn": "Search by Name"
         }
@@ -57,25 +57,28 @@ class CommitteeScraper():
 
     def search_accounts(self, response):
         # Parse the table of matching committee names
-        soup = BeautifulSoup(response.content, "html.parser")
-        committee_table = soup.findAll("table")[2]
-        rows = committee_table.findAll('tr')
-        # Add them to a list
-        committee_name_list = []
-        # Store names and account numbers
-        committees = {}
-        for committee in rows[1:]:
-            cells = committee.findAll('td')
-            name_cell = cells[0]
-            name = name_cell.find('a').text.strip()
-            url = name_cell.find('a')['href']
-            account_num = url.split('=')[1]
-            committee_name_list.append(name)
-            committees.update({name: account_num})
-        # Now see which committee matches best
-        matching_committee = difflib.get_close_matches(self.committee_name, 
-                                                       committee_name_list)[0]
-        return committees[matching_committee]
+        try:
+            soup = BeautifulSoup(response.content, "html.parser")
+            committee_table = soup.findAll("table")[2]
+            rows = committee_table.findAll('tr')
+            # Add them to a list
+            committee_name_list = []
+            # Store names and account numbers
+            committees = {}
+            for committee in rows[1:]:
+                cells = committee.findAll('td')
+                name_cell = cells[0]
+                name = name_cell.find('a').text.strip()
+                url = name_cell.find('a')['href']
+                account_num = url.split('=')[1]
+                committee_name_list.append(name)
+                committees.update({name: account_num})
+            # Now see which committee matches best
+            matching_committee = difflib.get_close_matches(self.committee_name,
+                                                           committee_name_list)[0]
+            return committees[matching_committee]
+        except IndexError:
+            print("Committee not found")
 
     def _update_payload(self, kwargs):
         """
