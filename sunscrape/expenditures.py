@@ -8,7 +8,8 @@ class ExpenditureScraper(SunScraper):
 
     result_type = 'expenditures'
     url = "https://dos.elections.myflorida.com/cgi-bin/expend.exe"
-    portal_url = "https://dos.elections.myflorida.com/campaign-finance/expenditures/"
+    portal_url = "https://dos.elections.myflorida.com/campaign-finance/ \
+        expenditures/"
     payload = {
         "election": "All",
         "search_on": 1,
@@ -64,13 +65,17 @@ class ExpenditureScraper(SunScraper):
         for expense in data:
 
             cleaned_expense = {}
-            cleaned_expense['spender'] = get_name(expense['Candidate/Committee'])
-            cleaned_expense['spender_party'] = get_party(expense['Candidate/Committee'])
+            cleaned_expense['spender'] = get_name(
+                expense['Candidate/Committee'])
+            cleaned_expense['spender_party'] = get_party(
+                expense['Candidate/Committee'])
             cleaned_expense['date'] = self.toDate(expense['Date'])
             cleaned_expense['amount'] = float(expense['Amount'])
             cleaned_expense['recipient'] = strip_spaces(expense['Payee Name'])
-            cleaned_expense['recipient_address'] = strip_spaces(expense['Address'])
-            cleaned_expense['recipient_address2'] = strip_spaces(expense['City State Zip'])
+            cleaned_expense['recipient_address'] = strip_spaces(
+                expense['Address'])
+            cleaned_expense['recipient_address2'] = strip_spaces(
+                expense['City State Zip'])
             cleaned_expense['purpose'] = strip_spaces(expense['Purpose'])
             cleaned_expense['type'] = strip_spaces(expense['Type'])
 

@@ -8,7 +8,8 @@ class ContributionScraper(SunScraper):
 
     result_type = 'contributions'
     url = "http://dos.elections.myflorida.com/cgi-bin/contrib.exe"
-    portal_url = "https://dos.elections.myflorida.com/campaign-finance/contributions/"
+    portal_url = "https://dos.elections.myflorida.com/campaign-finance/ \
+        contributions/"
     payload = {
         "election": "All",
         "search_on": 1,
@@ -66,16 +67,23 @@ class ContributionScraper(SunScraper):
         for contrib in data:
 
             cleaned_contrib = {}
-            cleaned_contrib['recipient'] = get_name(contrib['Candidate/Committee'])
-            cleaned_contrib['recipient_party'] = get_party(contrib['Candidate/Committee'])
+            cleaned_contrib['recipient'] = get_name(
+                contrib['Candidate/Committee'])
+            cleaned_contrib['recipient_party'] = get_party(
+                contrib['Candidate/Committee'])
             cleaned_contrib['date'] = self.toDate(contrib['Date'])
             cleaned_contrib['amount'] = float(contrib['Amount'])
             cleaned_contrib['type'] = strip_spaces(contrib['Typ'])
-            cleaned_contrib['contributor_name'] = strip_spaces(contrib['Contributor Name'])
-            cleaned_contrib['contributor_address'] = strip_spaces(contrib['Address'])
-            cleaned_contrib['contributor_address2'] = strip_spaces(contrib['City State Zip'])
-            cleaned_contrib['contributor_occupation'] = strip_spaces(contrib['Occupation'])
-            cleaned_contrib['inkind_description'] = strip_spaces(contrib['Inkind Desc'])
+            cleaned_contrib['contributor_name'] = strip_spaces(
+                contrib['Contributor Name'])
+            cleaned_contrib['contributor_address'] = strip_spaces(
+                contrib['Address'])
+            cleaned_contrib['contributor_address2'] = strip_spaces(
+                contrib['City State Zip'])
+            cleaned_contrib['contributor_occupation'] = strip_spaces(
+                contrib['Occupation'])
+            cleaned_contrib['inkind_description'] = strip_spaces(
+                contrib['Inkind Desc'])
 
             clean_data.append(cleaned_contrib)
 
