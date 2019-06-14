@@ -38,8 +38,7 @@ class CommitteeScraper():
         self.results = self._parse_results()
 
     def _get_account_num(self):
-        committee_search_url = "https://dos.elections.myflorida.com/ \
-            committees/ComLkupByName.asp"
+        committee_search_url = "https://dos.elections.myflorida.com/committees/ComLkupByName.asp"
 
         search_payload = {
             "searchtype": 1,
@@ -74,7 +73,7 @@ class CommitteeScraper():
             committee_name_list.append(name)
             committees.update({name: account_num})
         # Now see which committee matches best
-        matching_committee = difflib.get_close_matches(self.committee_name,
+        matching_committee = difflib.get_close_matches(self.committee_name, 
                                                        committee_name_list)[0]
         return committees[matching_committee]
 
@@ -96,8 +95,7 @@ class CommitteeScraper():
             self.payload["queryfor"] = 4
 
     def _get_details(self):
-        details_url = "https://dos.elections.myflorida.com/committees/ \
-            ComDetail.asp?account={}".format(self.account_num)
+        details_url = "https://dos.elections.myflorida.com/committees/ComDetail.asp?account={}".format(self.account_num)
         r = requests.get(details_url, allow_redirects=True)
         soup = BeautifulSoup(r.content, "html.parser")
         details_table = soup.find("table")
@@ -147,17 +145,12 @@ class CommitteeScraper():
                 cleaned_item['date'] = toDate(item['Date'])
                 cleaned_item['amount'] = float(item['Amount'])
                 cleaned_item['type'] = strip_spaces(item['Typ'])
-                cleaned_item['contributor_name'] = strip_spaces(
-                    item['Contributor Name'])
-                cleaned_item['contributor_address'] = strip_spaces(
-                    item['Address'])
-                cleaned_item['contributor_address2'] = strip_spaces(
-                    item['City State Zip'])
-                cleaned_item['contributor_occupation'] = strip_spaces(
-                    item['Occupation'])
+                cleaned_item['contributor_name'] = strip_spaces(item['Contributor Name'])
+                cleaned_item['contributor_address'] = strip_spaces(item['Address'])
+                cleaned_item['contributor_address2'] = strip_spaces(item['City State Zip'])
+                cleaned_item['contributor_occupation'] = strip_spaces(item['Occupation'])
                 cleaned_item['item_type'] = strip_spaces(item['Typ'])
-                cleaned_item['inkind_description'] = strip_spaces(
-                    item['InKind Desc'])
+                cleaned_item['inkind_description'] = strip_spaces(item['InKind Desc'])
 
                 clean_data.append(cleaned_item)
 
@@ -170,11 +163,9 @@ class CommitteeScraper():
                 cleaned_item['report_type'] = item['Rpt Type']
                 cleaned_item['date'] = toDate(item['Date'])
                 cleaned_item['amount'] = float(item['Amount'])
-                cleaned_item['paid_to_name'] = strip_spaces(
-                    item['Expense Paid To'])
+                cleaned_item['paid_to_name'] = strip_spaces(item['Expense Paid To'])
                 cleaned_item['paid_to_address'] = strip_spaces(item['Address'])
-                cleaned_item['paid_to_address2'] = strip_spaces(
-                    item['City State Zip'])
+                cleaned_item['paid_to_address2'] = strip_spaces(item['City State Zip'])
                 cleaned_item['purpose'] = strip_spaces(item['Purpose'])
                 cleaned_item['item_type'] = strip_spaces(item['Typ Reimb'])
 

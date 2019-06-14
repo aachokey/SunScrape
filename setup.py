@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='SunScrape',
-    version='0.1',
+    version='0.2',
     author="Aric Chokey",
     author_email="achokey21@gmail.com",
     description="A python library to scrape campaign " +
@@ -19,6 +19,6 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent"       
+        "Operating System :: OS Independent"
     ]
 )
