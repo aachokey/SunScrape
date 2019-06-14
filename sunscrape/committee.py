@@ -58,7 +58,8 @@ class CommitteeScraper():
     def search_accounts(self, response):
         # Parse the table of matching committee names
         soup = BeautifulSoup(response.content, "html.parser")
-        committee_table = soup.findAll("table")[2]
+        page_table = soup.find("form").find("table")
+        committee_table = page_table.findAll("table")[1]
         rows = committee_table.findAll('tr')
         # Add them to a list
         committee_name_list = []
