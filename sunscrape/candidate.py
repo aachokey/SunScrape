@@ -1,6 +1,8 @@
 from .base import SunScraper
 from .utils import get_name, get_party, strip_spaces
 
+import requests
+from bs4 import BeautifulSoup
 
 class CandidateScraper(SunScraper):
     """ Returns a candidate """
@@ -55,7 +57,7 @@ class CandidateScraper(SunScraper):
         return self.search_candidates(r)
 
     def search_candidates(self, response):
-
+        pass
 
     # TODO:
     # Search the account page for the candidate
