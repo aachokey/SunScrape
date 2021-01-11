@@ -8,8 +8,7 @@ class ContributionScraper(SunScraper):
 
     result_type = 'contributions'
     url = "http://dos.elections.myflorida.com/cgi-bin/contrib.exe"
-    portal_url = "https://dos.elections.myflorida.com/campaign-finance/ \
-        contributions/"
+    portal_url = "https://dos.elections.myflorida.com/campaign-finance/contributions/"
     payload = {
         "election": "All",
         "search_on": 1,
