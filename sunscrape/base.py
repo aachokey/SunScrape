@@ -16,8 +16,12 @@ class SunScraper(object):
     date_format = '%m/%d/%Y'
 
     def request(self, url, payload):
-
-        r = requests.get(url, params=payload, allow_redirects=True)
+        header = {
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36",
+            "referer": "https://www.google.com/"
+        }
+        r = requests.get(url, params=payload, headers=header)
+        # r = requests.get(url, params=payload, allow_redirects=True)
         if r.status_code == 200:
             reader = csv.DictReader(io.StringIO(r.text),
                                     delimiter='\t',
@@ -25,10 +29,10 @@ class SunScraper(object):
             return reader
 
         else:
+            # print(r.text)
             print("====\nERROR: {0} response from server\n====".format(
                                                                 r.status_code
                                                                 ))
-
 
 
     @classmethod
