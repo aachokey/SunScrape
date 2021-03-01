@@ -29,19 +29,7 @@ class SunScraper(object):
                                                                 r.status_code
                                                                 ))
 
-    # @classmethod
-    # def save_to_file(cls):
-    #     """
-    #     Save results to disk.
-    #     """
 
-    #     date = datetime.now().strftime('%m%d%Y')
-    #     file_path = os.getcwd() + '/{0}_{1}.json'.format(date,
-    #                                                      cls.result_type)
-    #     data = json.dumps(cls.results)
-
-    #     with open(file_path, 'w') as f:
-    #         f.write(data)
 
     @classmethod
     def get_election_ids(cls):
@@ -59,7 +47,11 @@ class SunScraper(object):
         elections = OrderedDict()
 
         url = cls.portal_url
-        r = requests.get(url, allow_redirects=True)
+        header = {
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36",
+            "referer": "https://www.google.com/"
+        }
+        r = requests.get(url, headers=header)
         soup = BeautifulSoup(r.content, "html.parser")
         elex_dropdown = soup.find("select", {"name": "election"})
         elections_list = elex_dropdown.findAll("option")
@@ -113,3 +105,17 @@ class SunScraper(object):
 
         except ValueError:
             return ''
+
+    # @classmethod
+    # def save_to_file(cls):
+    #     """
+    #     Save results to disk.
+    #     """
+
+    #     date = datetime.now().strftime('%m%d%Y')
+    #     file_path = os.getcwd() + '/{0}_{1}.json'.format(date,
+    #                                                      cls.result_type)
+    #     data = json.dumps(cls.results)
+
+    #     with open(file_path, 'w') as f:
+    #         f.write(data)
