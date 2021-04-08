@@ -98,6 +98,14 @@ class SunScraper(object):
         if "election_id" in kwargs.keys():
             self.payload["election"] = kwargs["election_id"]
 
+        if "contributor_first" in kwargs.keys():
+            self.payload["cfname"] = kwargs["contributor_first"]
+
+        if "contributor_last" in kwargs.keys():
+            self.payload["clname"] = kwargs["contributor_last"]
+            self.payload["namesearch"] = 1
+
+
     @classmethod
     def toDate(cls, text):
 
