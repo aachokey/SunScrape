@@ -131,5 +131,6 @@ pip-selfcheck.json
 ### Data files ###
 data*
 *.xlsx
+*.csv
 
 # End of https://www.gitignore.io/api/macos,python,virtualenv

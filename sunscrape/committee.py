@@ -1,14 +1,21 @@
-from .utils import strip_breaks, strip_spaces, toDate
+"""Scraper for committee campaign finance data."""
 
+from typing import Dict, Any, List, Optional
 import io
 import csv
 import difflib
+import logging
 import requests
 from bs4 import BeautifulSoup
 
+from .base import SunScraper, HTTPError, ParseError
+from .utils import strip_breaks, strip_spaces, toDate
 
-class CommitteeScraper():
-    """ Returns a committee """
+logger = logging.getLogger(__name__)
+
+
+class CommitteeScraper:
+    """Returns campaign finance data for a committee."""
 
     url = "https://dos.elections.myflorida.com/cgi-bin/TreFin.exe"
     payload = {
@@ -22,27 +29,44 @@ class CommitteeScraper():
         "query": "Submit Query Now"
     }
 
-    def __init__(self, committee_name='', result_type=''):
+    def __init__(self, committee_name: str = '', result_type: str = '') -> None:
         """
-        Keyword arguments:
-        ------------------
-        * committee_name - Committee name, or partial name
-        * result_type - contributions, expenditures, other or transfers
+        Initialize the committee scraper.
 
+        Args:
+            committee_name: Committee name, or partial name
+            result_type: One of 'contributions', 'expenditures', 'other', or 'transfers'
+
+        Raises:
+            ValueError: If committee is not found or result_type is invalid
         """
+        if not committee_name:
+            raise ValueError("committee_name is required")
+        if not result_type:
+            raise ValueError("result_type is required. Must be one of: contributions, expenditures, other, transfers")
+        if result_type not in ['contributions', 'expenditures', 'other', 'transfers']:
+            raise ValueError(f"Invalid result_type: {result_type}. Must be one of: contributions, expenditures, other, transfers")
+            
         self.committee_name = committee_name
         self.result_type = result_type
         self.account_num = self._get_account_num()
+        if self.account_num is None:
+            raise ValueError(f"Committee '{committee_name}' not found")
         self.committee_details = self._get_details()
-        self._update_payload(committee_name)
+        self._update_payload()
         self.results = self._parse_results()
 
-    def _get_account_num(self):
+    def _get_account_num(self) -> Optional[str]:
+        """
+        Get the account number for the committee.
+        
+        Returns:
+            Account number as string, or None if not found
+            
+        Raises:
+            HTTPError: If the request fails
+        """
         committee_search_url = "https://dos.elections.myflorida.com/committees/ComLkupByName.asp"
-        header = {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36",
-            "referer":"https://www.google.com/"
-        }
         search_payload = {
             "searchtype": 1,
             "comName": self.committee_name[:50],
@@ -50,44 +74,68 @@ class CommitteeScraper():
             "NameSearchBtn": "Search by Name"
         }
 
-        r = requests.get(
-            committee_search_url,
-            params=search_payload,
-            headers=header
-        )
+        try:
+            r = requests.get(
+                committee_search_url,
+                params=search_payload,
+                headers=SunScraper._default_headers,
+                timeout=30
+            )
+            r.raise_for_status()
+            return self.search_accounts(r)
+        except requests.RequestException as e:
+            raise HTTPError(f"Failed to search for committee: {e}") from e
 
-        print(r.status_code)
-
-        return self.search_accounts(r)
-
-    def search_accounts(self, response):
-        # Parse the table of matching committee names
+    def search_accounts(self, response: requests.Response) -> Optional[str]:
+        """
+        Parse the response to find matching committee account numbers.
+        
+        Args:
+            response: HTTP response from committee search
+            
+        Returns:
+            Account number as string, or None if not found
+        """
         try:
             soup = BeautifulSoup(response.content, "html.parser")
-            committee_table = soup.findAll("table")[2]
+            tables = soup.findAll("table")
+            if len(tables) < 3:
+                return None
+            committee_table = tables[2]
             rows = committee_table.findAll('tr')
-            # Add them to a list
+            
             committee_name_list = []
-            # Store names and account numbers
-            committees = {}
+            committees: Dict[str, str] = {}
+            
             for committee in rows[1:]:
                 cells = committee.findAll('td')
+                if not cells:
+                    continue
                 name_cell = cells[0]
-                name = name_cell.find('a').text.strip()
-                url = name_cell.find('a')['href']
-                account_num = url.split('=')[1]
-                committee_name_list.append(name)
-                committees.update({name: account_num})
-            # Now see which committee matches best
-            matching_committee = difflib.get_close_matches(self.committee_name,
-                                                           committee_name_list)[0]
-            return committees[matching_committee]
-        except IndexError:
-            print("Committee not found")
+                link = name_cell.find('a')
+                if not link:
+                    continue
+                name = link.text.strip()
+                url = link.get('href', '')
+                if '=' in url:
+                    account_num = url.split('=')[1]
+                    committee_name_list.append(name)
+                    committees[name] = account_num
+            
+            if not committee_name_list:
+                return None
+                
+            # Find best matching committee
+            matches = difflib.get_close_matches(self.committee_name, committee_name_list, n=1)
+            if matches:
+                return committees[matches[0]]
+            return None
+        except (IndexError, AttributeError, KeyError, ValueError) as e:
+            return None
 
-    def _update_payload(self, kwargs):
+    def _update_payload(self):
         """
-        Update the payload sent to the campaign finance site based on kwargs.
+        Update the payload sent to the campaign finance site.
         """
 
         self.payload["comname"] = self.committee_name
@@ -102,61 +150,97 @@ class CommitteeScraper():
         elif self.result_type == "transfers":
             self.payload["queryfor"] = 4
 
-    def _get_details(self):
-        details_url = "https://dos.elections.myflorida.com/committees/ComDetail.asp?account={}".format(self.account_num)
+    def _get_details(self) -> Dict[str, str]:
+        """
+        Get detailed information about the committee.
         
-        header = {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36",
-            "referer": "https://www.google.com/"
-        }
+        Returns:
+            Dictionary containing committee details
+            
+        Raises:
+            HTTPError: If the request fails
+            ParseError: If the page structure is unexpected
+        """
+        details_url = f"https://dos.elections.myflorida.com/committees/ComDetail.asp?account={self.account_num}"
         
-        r = requests.get(details_url, headers=header)
-        soup = BeautifulSoup(r.content, "html.parser")
-        details_table = soup.find("table")
-        rows = details_table.findAll('tr')
-        details = {
-            "type": strip_breaks(rows[2].findAll('td')[1].text),
-            "status": strip_breaks(rows[3].findAll('td')[1].text),
-            "address": strip_breaks(rows[4].findAll('td')[1].text),
-            "phone": strip_breaks(rows[5].findAll('td')[1].text),
-            "chair": strip_breaks(rows[6].findAll('td')[1].text),
-            "treasurer": strip_breaks(rows[7].findAll('td')[1].text),
-            "registered_agent": strip_breaks(rows[8].findAll('td')[1].text),
-            "purpose": strip_breaks(rows[9].findAll('td')[1].text),
-            "affiliates": strip_breaks(rows[10].findAll('td')[1].text)
-        }
+        try:
+            r = requests.get(details_url, headers=SunScraper._default_headers, timeout=30)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.content, "html.parser")
+            details_table = soup.find("table")
+            
+            if details_table is None:
+                raise ParseError("Could not find details table on committee page")
+                
+            rows = details_table.findAll('tr')
+            if len(rows) < 11:
+                raise ParseError("Unexpected table structure on committee details page")
+                
+            details: Dict[str, str] = {
+                "type": strip_breaks(rows[2].findAll('td')[1].text),
+                "status": strip_breaks(rows[3].findAll('td')[1].text),
+                "address": strip_breaks(rows[4].findAll('td')[1].text),
+                "phone": strip_breaks(rows[5].findAll('td')[1].text),
+                "chair": strip_breaks(rows[6].findAll('td')[1].text),
+                "treasurer": strip_breaks(rows[7].findAll('td')[1].text),
+                "registered_agent": strip_breaks(rows[8].findAll('td')[1].text),
+                "purpose": strip_breaks(rows[9].findAll('td')[1].text),
+                "affiliates": strip_breaks(rows[10].findAll('td')[1].text)
+            }
 
-        return details
+            return details
+        except requests.RequestException as e:
+            raise HTTPError(f"Failed to fetch committee details: {e}") from e
+        except (IndexError, AttributeError) as e:
+            raise ParseError(f"Failed to parse committee details: {e}") from e
 
-    def request(self, url, payload):
-        header = {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36",
-            'referer':'https://www.google.com/'
-        }
-        r = requests.get(url, params=payload, headers=header)
-        if r.status_code == 200:
-            reader = csv.DictReader(io.StringIO(r.text),
-                                    delimiter='\t',
-                                    quoting=csv.QUOTE_NONE)
-            return reader
+    def request(self, url: str, payload: Dict[str, Any]) -> Optional[Any]:
+        """
+        Make a request to the campaign finance site.
+        
+        Args:
+            url: The URL to request
+            payload: Query parameters to send
+            
+        Returns:
+            A CSV DictReader iterator, or None if the request failed
+            
+        Raises:
+            HTTPError: If the request fails
+        """
+        try:
+            r = requests.get(url, params=payload, headers=SunScraper._default_headers, timeout=30)
+            r.raise_for_status()
+            
+            if r.status_code == 200:
+                reader = csv.DictReader(
+                    io.StringIO(r.text),
+                    delimiter='\t',
+                    quoting=csv.QUOTE_NONE
+                )
+                return reader
+            else:
+                raise HTTPError(f"Server returned status code {r.status_code}")
+        except requests.RequestException as e:
+            raise HTTPError(f"Request failed: {e}") from e
 
-        else:
-            print("====\nERROR: {0} response from server\n====".format(
-                                                                r.status_code
-                                                                ))
-
-    def _parse_results(self):
+    def _parse_results(self) -> List[Dict[str, Any]]:
         """
         Clean up the returned results.
+        
+        Returns:
+            List of cleaned result dictionaries
         """
-
         data = self.request(self.url, self.payload)
 
-        clean_data = []
+        if data is None:
+            return []
+
+        clean_data: List[Dict[str, Any]] = []
 
         if self.result_type == 'contributions':
             for item in data:
-                cleaned_item = {}
+                cleaned_item: Dict[str, Any] = {}
                 cleaned_item['report_year'] = item['Rpt Yr']
                 cleaned_item['report_type'] = item['Rpt Type']
                 cleaned_item['date'] = toDate(item['Date'])
@@ -175,7 +259,7 @@ class CommitteeScraper():
 
         elif self.result_type == 'expenditures':
             for item in data:
-                cleaned_item = {}
+                cleaned_item: Dict[str, Any] = {}
                 cleaned_item['report_year'] = item['Rpt Yr']
                 cleaned_item['report_type'] = item['Rpt Type']
                 cleaned_item['date'] = toDate(item['Date'])
@@ -190,5 +274,41 @@ class CommitteeScraper():
 
             return clean_data
 
-        elif self.result_type == '':
-            print('Error: No result type provided.')
+        # Other result types can be added here
+        return clean_data
+
+    def save_committee_details(self, filepath: Optional[str] = None) -> str:
+        """
+        Save committee details to a CSV file.
+        
+        Args:
+            filepath: Optional filepath. If not provided, generates a filename with timestamp.
+            
+        Returns:
+            Path to the saved file
+            
+        Raises:
+            ValueError: If committee details are not available
+            IOError: If file cannot be written
+        """
+        from datetime import datetime
+        
+        if not hasattr(self, 'committee_details') or self.committee_details is None:
+            raise ValueError("No committee details available to save.")
+        
+        if filepath is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            safe_name = self.committee_name.replace(' ', '_').replace('/', '_')[:50]
+            filepath = f"committee_{safe_name}_{timestamp}.csv"
+        
+        try:
+            # Convert single dict to list for CSV writer
+            with open(filepath, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=self.committee_details.keys())
+                writer.writeheader()
+                writer.writerow(self.committee_details)
+            logger.info(f"Saved committee details to {filepath}")
+            return filepath
+        except IOError as e:
+            logger.error(f"Failed to save committee details: {e}")
+            raise IOError(f"Failed to save committee details: {e}") from e

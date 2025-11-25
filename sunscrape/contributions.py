@@ -1,10 +1,12 @@
+"""Scraper for campaign contributions."""
+
+from typing import Dict, Any, List
 from .base import SunScraper
 from .utils import get_name, get_party, strip_spaces
 
 
 class ContributionScraper(SunScraper):
-
-    """ Returns a list of contributions """
+    """Returns a list of contributions."""
 
     result_type = 'contributions'
     url = "http://dos.elections.myflorida.com/cgi-bin/contrib.exe"
@@ -37,35 +39,65 @@ class ContributionScraper(SunScraper):
         "queryformat": 2
     }
 
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        enrich: bool = True,
+        **kwargs: Any
+    ) -> None:
         """
+        Initialize the contribution scraper.
+
         Keyword arguments:
         ------------------
+        * enrich - Whether to automatically enrich results with candidate data (default: True)
         * candidate_first - Candidate first name
         * candidate_last - Candidate last name
         * from_date - Contributions start date (MM/DD/YYYY)
         * to_date - Contributions end date (MM/DD/YYYY)
         * committee_name - Committee name, or partial name
-        * election_id - See base._get_election_ids
+        * election_id - See base.get_election_ids
         * all_time - True or False, returns results beyond current election
         """
-
+        from .candidate_lookup import CandidateLookup
+        
         self._update_payload(kwargs)
-        self.results = self._parse_results(self.request(
-                                                self.url,
-                                                self.payload)
-                                           )
+        data = self.request(self.url, self.payload)
+        if data is None:
+            self.results: List[Dict[str, Any]] = []
+        else:
+            self.results = self._parse_results(data)
+        
+        # Automatically enrich with candidate and committee data by default
+        if enrich:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info("Enriching contribution results with candidate and committee data...")
+            logger.info("  Loading candidates and committees...")
+            candidate_lookup = CandidateLookup()
+            from .committee_lookup import CommitteeLookup
+            committee_lookup = CommitteeLookup()
+            self.results = candidate_lookup.merge_with_transactions(
+                transactions=self.results,
+                name_field='recipient',
+                party_field='recipient_party',
+                committee_lookup=committee_lookup
+            )
+            logger.info("✓ Contribution enrichment complete")
 
-    def _parse_results(self, data):
+    def _parse_results(self, data: Any) -> List[Dict[str, Any]]:
         """
         Clean up the returned results.
+        
+        Args:
+            data: CSV DictReader iterator
+            
+        Returns:
+            List of cleaned contribution dictionaries
         """
-
         clean_data = []
 
         for contrib in data:
-
-            cleaned_contrib = {}
+            cleaned_contrib: Dict[str, Any] = {}
             cleaned_contrib['recipient'] = get_name(
                 contrib['Candidate/Committee'])
             cleaned_contrib['recipient_party'] = get_party(

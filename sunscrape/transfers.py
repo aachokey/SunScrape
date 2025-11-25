@@ -1,10 +1,12 @@
+"""Scraper for fund transfers."""
+
+from typing import Dict, Any, List
 from .base import SunScraper
 from .utils import get_name, get_party, strip_spaces
 
 
 class TransferScraper(SunScraper):
-
-    """ Returns a list of fund transfers """
+    """Returns a list of fund transfers."""
 
     result_type = "transfers"
     url = "https://dos.elections.myflorida.com/cgi-bin/FundXfers.exe"
@@ -30,7 +32,7 @@ class TransferScraper(SunScraper):
         "czipcode": "",
         "cpurpose": "",
         "cdollar_minimum": "",
-        "cdollar_maximim": "",
+        "cdollar_maximum": "",
         "rowlimit": "",
         "csort1": "DAT",
         "csort2": "CAN",
@@ -39,31 +41,39 @@ class TransferScraper(SunScraper):
         "queryformat": 2
     }
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """
+        Initialize the transfer scraper.
+
         Keyword arguments:
         ------------------
         * candidate_first - Candidate first name
         * candidate_last - Candidate last name
         * committee_name - Committee name, or partial name
-        * election_id - See base._get_election_ids
+        * election_id - See base.get_election_ids
         * all_time - True or False, returns results beyond current election
         """
         self._update_payload(kwargs)
-        self.results = self._parse_results(self.request(
-                                                self.url,
-                                                self.payload)
-                                           )
+        data = self.request(self.url, self.payload)
+        if data is None:
+            self.results: List[Dict[str, Any]] = []
+        else:
+            self.results = self._parse_results(data)
 
-    def _parse_results(self, data):
-
-        """ Clean up the returned results. """
-
+    def _parse_results(self, data: Any) -> List[Dict[str, Any]]:
+        """
+        Clean up the returned results.
+        
+        Args:
+            data: CSV DictReader iterator
+            
+        Returns:
+            List of cleaned transfer dictionaries
+        """
         clean_data = []
 
         for transfer in data:
-
-            cleaned_transfer = {}
+            cleaned_transfer: Dict[str, Any] = {}
             cleaned_transfer['transfer_from'] = get_name(transfer['Candidate/Committee'])
             cleaned_transfer['transfer_from_party'] = get_party(transfer['Candidate/Committee'])
             cleaned_transfer['date'] = self.toDate(transfer['Date'])
