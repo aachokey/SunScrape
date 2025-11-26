@@ -1,7 +1,11 @@
 """Scraper for campaign contributions."""
 
+import logging
 from typing import Dict, Any, List
+
 from .base import SunScraper
+from .candidate_lookup import CandidateLookup
+from .committee_lookup import CommitteeLookup
 from .utils import get_name, get_party, strip_spaces
 
 
@@ -58,8 +62,6 @@ class ContributionScraper(SunScraper):
         * election_id - See base.get_election_ids
         * all_time - True or False, returns results beyond current election
         """
-        from .candidate_lookup import CandidateLookup
-        
         self._update_payload(kwargs)
         data = self.request(self.url, self.payload)
         if data is None:
@@ -69,12 +71,10 @@ class ContributionScraper(SunScraper):
         
         # Automatically enrich with candidate and committee data by default
         if enrich:
-            import logging
             logger = logging.getLogger(__name__)
             logger.info("Enriching contribution results with candidate and committee data...")
             logger.info("  Loading candidates and committees...")
             candidate_lookup = CandidateLookup()
-            from .committee_lookup import CommitteeLookup
             committee_lookup = CommitteeLookup()
             self.results = candidate_lookup.merge_with_transactions(
                 transactions=self.results,

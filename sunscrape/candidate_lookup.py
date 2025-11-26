@@ -2,9 +2,12 @@
 
 import csv
 import logging
+import os
 import re
 from typing import Dict, List, Optional, Any, Tuple, TYPE_CHECKING
 from collections import defaultdict
+
+from .candidate import CandidateScraper
 
 if TYPE_CHECKING:
     from .committee_lookup import CommitteeLookup
@@ -132,9 +135,6 @@ class CandidateLookup:
         # Index: normalized full name -> list of account numbers
         self.name_index: Dict[str, List[str]] = defaultdict(list)
         
-        # Index: normalized last name -> list of account numbers
-        self.lastname_index: Dict[str, List[str]] = defaultdict(list)
-        
         # Index: (first, last) tuple -> list of account numbers
         self.component_index: Dict[Tuple[str, str], List[str]] = defaultdict(list)
         
@@ -175,13 +175,19 @@ class CandidateLookup:
                 if reader.fieldnames is None:
                     raise ValueError("CSV file has no headers")
                 
+                # Log fieldnames for debugging (first time only) - helps identify actual fieldnames
+                if not hasattr(self, '_fieldnames_logged'):
+                    logger.info(f"Candidate CSV fieldnames: {reader.fieldnames}")
+                    self._fieldnames_logged = True
+                
                 loaded = 0
                 for row in reader:
+                    # Use exact fieldname from CSV: 'AcctNum'
                     acct_num = row.get('AcctNum', '').strip()
                     if not acct_num:
                         continue
                     
-                    # Store candidate data
+                    # Store candidate data (all fields preserved)
                     self.candidates[acct_num] = dict(row)
                     
                     # Build indexes
@@ -221,8 +227,6 @@ class CandidateLookup:
         Raises:
             HTTPError: If download fails
         """
-        from .candidate import CandidateScraper
-        
         if election_ids is None:
             logger.info("Fetching list of available elections...")
             elections = CandidateScraper.get_available_elections()
@@ -248,7 +252,6 @@ class CandidateLookup:
                 logger.info(f"  ✓ Loaded {loaded} candidates from {election_id} (total: {total_loaded})")
                 
                 # Clean up temp file
-                import os
                 try:
                     os.remove(temp_file)
                 except:
@@ -281,13 +284,9 @@ class CandidateLookup:
         if normalized_full:
             self.name_index[normalized_full].append(acct_num)
         
-        # Index by normalized last name
-        normalized_last = normalize_name(last)
-        if normalized_last:
-            self.lastname_index[normalized_last].append(acct_num)
-        
         # Index by (first, last) components
         normalized_first = normalize_name(first)
+        normalized_last = normalize_name(last)
         if normalized_first and normalized_last:
             key = (normalized_first, normalized_last)
             self.component_index[key].append(acct_num)
@@ -383,7 +382,8 @@ class CandidateLookup:
         if party is None:
             return True
         
-        candidate_party = candidate.get('PartyName', '').strip()
+        # Use exact CSV fieldname: 'PartyDesc'
+        candidate_party = candidate.get('PartyDesc', '').strip()
         candidate_party_code = candidate.get('PartyCode', '').strip()
         
         # Normalize party names for comparison
@@ -508,18 +508,24 @@ class CandidateLookup:
                         enriched_transaction['entity_election_id'] = entity.get('ElectionID', '')
                         enriched_transaction['entity_office'] = entity.get('OfficeDesc', '')
                         enriched_transaction['entity_status'] = entity.get('StatusDesc', '')
-                        enriched_transaction['entity_party'] = entity.get('PartyName', '')
+                        enriched_transaction['entity_party'] = entity.get('PartyDesc', '')
                         enriched_transaction['entity_email'] = entity.get('Email', '')
                         enriched_transaction['entity_phone'] = entity.get('Phone', '')
                         enriched_transaction['entity_type_detail'] = 'candidate'
+                        # Candidate address fields
+                        enriched_transaction['entity_address1'] = entity.get('Addr1', '') or ''
+                        enriched_transaction['entity_address2'] = entity.get('Addr2', '') or ''
+                        enriched_transaction['entity_city'] = entity.get('City', '') or ''
+                        enriched_transaction['entity_state'] = entity.get('State', '') or ''
+                        enriched_transaction['entity_zip'] = entity.get('Zip', '') or ''
+                        enriched_transaction['entity_address'] = None  # Not used for candidates
                     else:
                         # Committee-specific fields
-                        # Try to get committee name from various possible fields
+                        # Use exact fieldname from CSV: 'Committee Name' (with space)
+                        # Online-found committees use: 'Committee Name' or 'Name'
                         committee_name = (
                             entity.get('Committee Name', '') or
-                            entity.get('CommitteeName', '') or
-                            entity.get('Name', '') or
-                            entity.get('ComName', '')
+                            entity.get('Name', '')
                         )
                         enriched_transaction['entity_name'] = committee_name
                         enriched_transaction['entity_name_first'] = None
@@ -527,11 +533,49 @@ class CandidateLookup:
                         enriched_transaction['entity_name_middle'] = None
                         enriched_transaction['entity_election_id'] = None
                         enriched_transaction['entity_office'] = None
-                        enriched_transaction['entity_status'] = entity.get('Status', '') or entity.get('Committee Status', '')
+                        # Use exact fieldname: 'Status' (CSV) or 'Status' (online)
+                        enriched_transaction['entity_status'] = entity.get('Status', '')
                         enriched_transaction['entity_party'] = None
                         enriched_transaction['entity_email'] = None
                         enriched_transaction['entity_phone'] = None
-                        enriched_transaction['entity_type_detail'] = entity.get('Type', '') or entity.get('Committee Type', '')
+                        # Use exact fieldname: 'Type' (both CSV and online)
+                        enriched_transaction['entity_type_detail'] = entity.get('Type', '')
+                        
+                        # Committee address fields
+                        # CSV files have: 'Addr 1', 'Addr 2', 'City', 'State', 'Zip' (with spaces)
+                        # Online-found committees have: 'Address' (single combined field)
+                        
+                        # First try single combined address field (for online-found committees)
+                        committee_address = entity.get('Address', '')
+                        
+                        # If no single address field, build from separate CSV fields
+                        if not committee_address:
+                            # Use exact CSV fieldnames: 'Addr 1', 'Addr 2', 'City', 'State', 'Zip'
+                            addr1 = entity.get('Addr 1', '')
+                            addr2 = entity.get('Addr 2', '')
+                            city = entity.get('City', '')
+                            state = entity.get('State', '')
+                            zip_code = entity.get('Zip', '')
+                            
+                            # Build combined address string
+                            address_parts = []
+                            if addr1:
+                                address_parts.append(addr1)
+                            if addr2:
+                                address_parts.append(addr2)
+                            if city or state or zip_code:
+                                city_state_zip = ', '.join(filter(None, [city, state, zip_code]))
+                                if city_state_zip:
+                                    address_parts.append(city_state_zip)
+                            
+                            committee_address = '; '.join(address_parts) if address_parts else ''
+                        
+                        enriched_transaction['entity_address'] = committee_address
+                        enriched_transaction['entity_address1'] = None  # Committees use single address field
+                        enriched_transaction['entity_address2'] = None
+                        enriched_transaction['entity_city'] = None
+                        enriched_transaction['entity_state'] = None
+                        enriched_transaction['entity_zip'] = None
                 else:
                     # No match found
                     enriched_transaction['entity_type'] = None
@@ -547,6 +591,12 @@ class CandidateLookup:
                     enriched_transaction['entity_email'] = None
                     enriched_transaction['entity_phone'] = None
                     enriched_transaction['entity_type_detail'] = None
+                    enriched_transaction['entity_address'] = None
+                    enriched_transaction['entity_address1'] = None
+                    enriched_transaction['entity_address2'] = None
+                    enriched_transaction['entity_city'] = None
+                    enriched_transaction['entity_state'] = None
+                    enriched_transaction['entity_zip'] = None
                 
                 enriched[idx] = enriched_transaction
                 processed_count += 1
@@ -573,6 +623,12 @@ class CandidateLookup:
             enriched_transaction['entity_email'] = None
             enriched_transaction['entity_phone'] = None
             enriched_transaction['entity_type_detail'] = None
+            enriched_transaction['entity_address'] = None
+            enriched_transaction['entity_address1'] = None
+            enriched_transaction['entity_address2'] = None
+            enriched_transaction['entity_city'] = None
+            enriched_transaction['entity_state'] = None
+            enriched_transaction['entity_zip'] = None
             enriched[idx] = enriched_transaction
             processed_count += 1
         

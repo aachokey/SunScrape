@@ -2,18 +2,21 @@
 
 import csv
 import logging
+import os
 import re
 import requests
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
 from bs4 import BeautifulSoup
+from datetime import datetime
 
 from .base import SunScraper, HTTPError, ParseError
+from .utils import strip_breaks
 
 logger = logging.getLogger(__name__)
 
 
-def normalize_committee_name(name: str) -> str:
+def normalize_committee_name(name: str, lowercase: bool = False) -> str:
     """
     Normalize a committee name for matching purposes.
     
@@ -21,6 +24,7 @@ def normalize_committee_name(name: str) -> str:
     
     Args:
         name: Committee name string to normalize
+        lowercase: Whether to convert to lowercase (for case-insensitive matching)
         
     Returns:
         Normalized name string
@@ -28,14 +32,49 @@ def normalize_committee_name(name: str) -> str:
     if not name:
         return ""
     
-    # Remove common suffixes/designations
+    # Remove common suffixes/designations (but keep them for some matching strategies)
     name = re.sub(r'\s+(PC|PAC|INC|LLC|CORP|CORPORATION|COMMITTEE)\s*$', '', name, flags=re.IGNORECASE)
     
     # Standardize case and remove extra spaces
     name = ' '.join(name.split())
     name = name.strip()
     
+    if lowercase:
+        name = name.lower()
+    
     return name
+
+
+def get_search_variants(search_term: str) -> List[str]:
+    """
+    Get search variants for a committee name, handling truncation issues.
+    
+    When a name is truncated at 50 chars, it might cut off mid-word.
+    This function creates variants that handle partial words at the end.
+    
+    Args:
+        search_term: The search term (may be truncated)
+        
+    Returns:
+        List of search variants to try
+    """
+    normalized = normalize_committee_name(search_term, lowercase=True)
+    variants = [normalized]
+    
+    # If the search term appears to be truncated (ends with a partial word),
+    # create a variant without the last word
+    words = normalized.split()
+    if len(words) > 1:
+        last_word = words[-1]
+        # Check if last word is very short (likely truncated at 50 char limit)
+        if len(last_word) <= 3:
+            variant = ' '.join(words[:-1])
+            if variant:
+                variants.append(variant)
+    
+    return variants
+
+
 
 
 class CommitteeLookup:
@@ -59,7 +98,7 @@ class CommitteeLookup:
         # Primary storage: account number -> committee data
         self.committees: Dict[str, Dict[str, Any]] = {}
         
-        # Index: normalized name -> list of account numbers
+        # Index: normalized name (lowercase) -> list of account numbers
         self.name_index: Dict[str, List[str]] = defaultdict(list)
         
         self.total_committees = 0
@@ -83,8 +122,6 @@ class CommitteeLookup:
         Raises:
             HTTPError: If download fails
         """
-        from .base import SunScraper
-        
         try:
             # Download to temp file
             temp_file = SunScraper.download_active_committees()
@@ -93,7 +130,6 @@ class CommitteeLookup:
             loaded = self._load_from_file(temp_file)
             
             # Clean up temp file
-            import os
             try:
                 os.remove(temp_file)
             except:
@@ -125,30 +161,26 @@ class CommitteeLookup:
                 if reader.fieldnames is None:
                     raise ValueError("CSV file has no headers")
                 
+                # Log fieldnames for debugging (first time only) - helps identify actual fieldnames
+                if not hasattr(self, '_fieldnames_logged'):
+                    logger.info(f"Committee CSV fieldnames: {reader.fieldnames}")
+                    self._fieldnames_logged = True
+                
                 loaded = 0
                 for row in reader:
-                    # Try different possible field names for account number
-                    acct_num = (
-                        row.get('AcctNum', '') or 
-                        row.get('Account Number', '') or
-                        row.get('AccountNumber', '')
-                    ).strip()
+                    # Use exact fieldname from CSV: 'AcctNum'
+                    acct_num = row.get('AcctNum', '').strip()
                     
                     if not acct_num:
                         continue
                     
-                    # Try different possible field names for committee name
-                    committee_name = (
-                        row.get('Committee Name', '') or
-                        row.get('CommitteeName', '') or
-                        row.get('Name', '') or
-                        row.get('ComName', '')
-                    ).strip()
+                    # Use exact fieldname from CSV: 'Committee Name' (with space)
+                    committee_name = row.get('Committee Name', '').strip()
                     
                     if not committee_name:
                         continue
                     
-                    # Store committee data
+                    # Store committee data (all fields preserved)
                     self.committees[acct_num] = dict(row)
                     
                     # Build indexes
@@ -168,15 +200,16 @@ class CommitteeLookup:
     
     def _index_committee(self, acct_num: str, committee_name: str) -> None:
         """
-        Add a committee to all indexes.
+        Add a committee to the index.
         
         Args:
             acct_num: Account number (key)
             committee_name: Committee name
         """
-        normalized_name = normalize_committee_name(committee_name)
-        if normalized_name:
-            self.name_index[normalized_name].append(acct_num)
+        # Index by normalized name (lowercase) for case-insensitive exact matching
+        normalized_lower = normalize_committee_name(committee_name, lowercase=True)
+        if normalized_lower:
+            self.name_index[normalized_lower].append(acct_num)
     
     def find_by_name(
         self,
@@ -185,7 +218,7 @@ class CommitteeLookup:
         fallback_search: bool = True
     ) -> List[Dict[str, Any]]:
         """
-        Find committees by name using exact matching, with optional fallback to online search.
+        Find committees by name using exact matching (case-insensitive), with optional fallback to online search.
         
         Args:
             name: Committee name to search for
@@ -198,11 +231,11 @@ class CommitteeLookup:
         if not name:
             return []
         
-        normalized_search = normalize_committee_name(name)
+        normalized_search = normalize_committee_name(name, lowercase=True)
         if not normalized_search:
             return []
         
-        # Check cache first
+        # Check cache first (use lowercase for cache key)
         if use_cache:
             if normalized_search in self._lookup_cache:
                 return self._lookup_cache[normalized_search]
@@ -210,7 +243,7 @@ class CommitteeLookup:
         matches = []
         seen_accounts = set()
         
-        # Exact match on normalized name
+        # Exact match on normalized name (case-insensitive)
         if normalized_search in self.name_index:
             for acct_num in self.name_index[normalized_search]:
                 if acct_num not in seen_accounts:
@@ -226,15 +259,20 @@ class CommitteeLookup:
         
         # Fallback: search online if not found in loaded data
         if not matches and fallback_search:
-            logger.debug(f"Committee '{name}' not found in loaded data, searching online...")
+            logger.info(f"Committee '{name}' not found in loaded data ({self.total_committees} committees), searching online...")
             online_match = self._search_online(name)
             if online_match:
                 matches.append(online_match)
                 # Add to cache and indexes for future use
                 if online_match['account'] not in self.committees:
                     self.committees[online_match['account']] = online_match['committee']
-                    self._index_committee(online_match['account'], name)
+                    # Use the found name for indexing
+                    found_name = online_match['committee'].get('Committee Name') or online_match['committee'].get('Name') or name
+                    self._index_committee(online_match['account'], found_name)
                     self.total_committees += 1
+                    logger.info(f"  Added '{found_name}' to committee lookup (account: {online_match['account']})")
+            else:
+                logger.debug(f"  Online search also failed to find '{name}'")
         
         # Cache the result
         if use_cache:
@@ -288,10 +326,17 @@ class CommitteeLookup:
             if len(rows) < 2:
                 return None
             
-            # Find best matching committee from search results
+            # Find matching committee from search results (case-insensitive)
+            # The search form has a 50 char limit, but results show full names
+            # We prioritize matches that best match the source data name
             best_match = None
             best_name = None
-            normalized_search = normalize_committee_name(committee_name).lower()
+            best_score = 0.0
+            normalized_search = normalize_committee_name(committee_name, lowercase=True)
+            # Also normalize the truncated search term (what we actually sent to the form)
+            normalized_search_truncated = normalize_committee_name(committee_name[:50], lowercase=True)
+            # Get search variants to handle truncation issues
+            search_variants = get_search_variants(committee_name[:50])
             
             for row in rows[1:]:
                 cells = row.findAll('td')
@@ -306,18 +351,42 @@ class CommitteeLookup:
                 url = link.get('href', '')
                 if '=' in url:
                     account_num = url.split('=')[1]
-                    normalized_found = normalize_committee_name(found_name).lower()
+                    normalized_found = normalize_committee_name(found_name, lowercase=True)
+                    score = 0.0
+                    match_type = None
                     
-                    # Check if this is an exact or close match
+                    # Strategy 1: Exact match (case-insensitive) - highest priority
                     if normalized_found == normalized_search:
                         best_match = account_num
                         best_name = found_name
-                        break
-                    elif normalized_search in normalized_found or normalized_found in normalized_search:
-                        # Partial match - use this if we don't have an exact match
-                        if best_match is None:
-                            best_match = account_num
-                            best_name = found_name
+                        best_score = 1.0
+                        match_type = "exact"
+                        break  # Perfect match, stop searching
+                    
+                    # Strategy 2: Found name starts with search term (high priority)
+                    # Try all search variants to handle truncation issues
+                    for variant in search_variants:
+                        if normalized_found.startswith(variant):
+                            # Score based on how much of the search term matches
+                            score = len(variant) / len(normalized_found) if normalized_found else 0
+                            if score > best_score:
+                                best_match = account_num
+                                best_name = found_name
+                                best_score = score
+                                match_type = f"starts_with_variant_{search_variants.index(variant)}"
+                    
+                    # Strategy 3: Search term is contained in found name (lower priority)
+                    # Only use this if we don't have a start-of-string match
+                    if best_score == 0.0:
+                        for variant in search_variants:
+                            if variant in normalized_found:
+                                # Score based on how much of the search term is in the result
+                                score = len(variant) / max(len(normalized_found), len(variant))
+                                if score > best_score:
+                                    best_match = account_num
+                                    best_name = found_name
+                                    best_score = score
+                                    match_type = f"contains_variant_{search_variants.index(variant)}"
             
             if not best_match:
                 return None
@@ -328,13 +397,14 @@ class CommitteeLookup:
                 return None
             
             # Build committee data dictionary
+            committee_address = details.get('address', '').strip()
             committee_data = {
                 'AcctNum': best_match,
                 'Committee Name': best_name or committee_name,
                 'Name': best_name or committee_name,
                 'Type': details.get('type', ''),
                 'Status': details.get('status', ''),
-                'Address': details.get('address', ''),
+                'Address': committee_address,
                 'Phone': details.get('phone', ''),
                 'Chair': details.get('chair', ''),
                 'Treasurer': details.get('treasurer', ''),
@@ -367,8 +437,6 @@ class CommitteeLookup:
         Returns:
             Dictionary with committee details, or None if not found
         """
-        from .utils import strip_breaks
-        
         details_url = f"https://dos.elections.myflorida.com/committees/ComDetail.asp?account={account_num}"
         
         headers = {
@@ -391,16 +459,19 @@ class CommitteeLookup:
             if len(rows) < 11:
                 return None
                 
+            # Extract address - it's in row 4, column 1
+            address_text = strip_breaks(rows[4].findAll('td')[1].text) if len(rows) > 4 and len(rows[4].findAll('td')) > 1 else ''
+            
             details: Dict[str, str] = {
-                "type": strip_breaks(rows[2].findAll('td')[1].text),
-                "status": strip_breaks(rows[3].findAll('td')[1].text),
-                "address": strip_breaks(rows[4].findAll('td')[1].text),
-                "phone": strip_breaks(rows[5].findAll('td')[1].text),
-                "chair": strip_breaks(rows[6].findAll('td')[1].text),
-                "treasurer": strip_breaks(rows[7].findAll('td')[1].text),
-                "registered_agent": strip_breaks(rows[8].findAll('td')[1].text),
-                "purpose": strip_breaks(rows[9].findAll('td')[1].text),
-                "affiliates": strip_breaks(rows[10].findAll('td')[1].text)
+                "type": strip_breaks(rows[2].findAll('td')[1].text) if len(rows) > 2 and len(rows[2].findAll('td')) > 1 else '',
+                "status": strip_breaks(rows[3].findAll('td')[1].text) if len(rows) > 3 and len(rows[3].findAll('td')) > 1 else '',
+                "address": address_text,
+                "phone": strip_breaks(rows[5].findAll('td')[1].text) if len(rows) > 5 and len(rows[5].findAll('td')) > 1 else '',
+                "chair": strip_breaks(rows[6].findAll('td')[1].text) if len(rows) > 6 and len(rows[6].findAll('td')) > 1 else '',
+                "treasurer": strip_breaks(rows[7].findAll('td')[1].text) if len(rows) > 7 and len(rows[7].findAll('td')) > 1 else '',
+                "registered_agent": strip_breaks(rows[8].findAll('td')[1].text) if len(rows) > 8 and len(rows[8].findAll('td')) > 1 else '',
+                "purpose": strip_breaks(rows[9].findAll('td')[1].text) if len(rows) > 9 and len(rows[9].findAll('td')) > 1 else '',
+                "affiliates": strip_breaks(rows[10].findAll('td')[1].text) if len(rows) > 10 and len(rows[10].findAll('td')) > 1 else ''
             }
             
             return details

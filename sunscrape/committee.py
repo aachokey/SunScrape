@@ -6,6 +6,7 @@ import csv
 import difflib
 import logging
 import requests
+from datetime import datetime
 from bs4 import BeautifulSoup
 
 from .base import SunScraper, HTTPError, ParseError
@@ -291,8 +292,6 @@ class CommitteeScraper:
             ValueError: If committee details are not available
             IOError: If file cannot be written
         """
-        from datetime import datetime
-        
         if not hasattr(self, 'committee_details') or self.committee_details is None:
             raise ValueError("No committee details available to save.")
         
